@@ -1,0 +1,91 @@
+---
+format_version: 1.4.0
+default_step_lib_source: 'https://github.com/bitrise-io/bitrise-steplib.git'
+trigger_map:
+- push_branch: stage
+  workflow: metrics
+- push_branch: development
+  workflow: primary
+- push_branch: master
+  workflow: primary
+- pull_request_source_branch: '*'
+  workflow: primary
+  pull_request_target_branch: development
+- pull_request_source_branch: '*'
+  workflow: primary
+  pull_request_target_branch: master
+- tag: android-*-*.*.*
+  workflow: android
+- tag: ios-*-*.*.*
+  workflow: ios
+workflows:
+  _run_from_repo:
+    steps:
+    - activate-ssh-key:
+        run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+    - git-clone: {}
+    - script:
+        title: continue from repo
+        inputs:
+        - content: |-
+            #!/bin/bash
+            set -ex
+            bitrise run "${BITRISE_TRIGGERED_WORKFLOW_ID}"
+  metrics:
+    steps:
+    - activate-ssh-key@4.0.3:
+        run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+    - git-clone@4.0.14: {}
+    - script@1.1.5:
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            #!/usr/bin/env bash
+            # fail if any commands fails
+            set -e
+            # debug log
+            set -x
+            metrics_folder=${BITRISE_SOURCE_DIR:="."}/.metrics
+
+            function cloneMetricsRepo () {
+              git clone --single-branch --branch master https://${GITHUB_WOLOX_CI_USER}:${GITHUB_WOLOX_CI_PASSWORD}@github.com/Wolox/mobile-project-metrics.git ${metrics_folder}
+            }
+
+            cloneMetricsRepo
+            sh ${metrics_folder}/metrics.sh
+    envs:
+    - GIT_URL: 'https://github.com/Wolox/%project-repo-name%'
+    - STAGING_BRANCH: stage
+    - PRODUCTION_BRANCH: master
+    - FIREBASE_PRODUCTION_PROJECT_ID: ''
+    - FIREBASE_STAGE_PROJECT_ID: ''
+    - FIREBASE_ANDROID_STAGE_APP: ''
+    - FIREBASE_ANDROID_PRODUCTION_APP: ''
+    - FIREBASE_IOS_STAGE_APP: ''
+    - FIREBASE_IOS_PRODUCTION_APP: ''
+    - PROJECT_NAME: %Project Name%
+    - PROJECT_TYPE: %react_native / ios / android%
+    - ENV_TEMPLATE_NAME: %development env file name%
+    - KEYSTORE_NAME: %Keystore Name%
+    - GOOGLE_SERVICES_NAME: %google services file name%
+    - RELEASE_COMMAND: assembleQaRelease
+    - ENV_TEMPLATE: >-
+        IyBCYWNrZW5kCkFQSV9CQVNFX1VSTD1YWFhYWFhYWFhYWFhYWAoKIyBHb29nbGUgTWFwcwpHT09HTEVfTUFQU19BUElfVVJMPWh0dHBzOi8vbWFwcy5nb29nbGVhcGlzLmNvbS9tYXBzL2FwaS8KR09PR0xFX01BUFNfQVBJX0tFWV9BTkRST0lEPVhYWFhYWFhYWFhYWFhYCkdPT0dMRV9NQVBTX0FQSV9LRVlfSU9TPVhYWFhYWFhYWFhYWFhYCgojWkVOREVTSwpaRU5ERVNLX0FDQ09VTlRfS0VZPVhYWFhYWFhYWFhYWFhYCgojIyBGaXJlYmFzZSBTZW5kZXIgSUQKU0VOREVSX0lEPVhYWFhYWFhYWFhYWFhYCgo=
+    - APK_PATH: qa/release/app-qa-release.apk
+  primary:
+    after_run:
+    - _run_from_repo
+  android:
+    after_run:
+    - _run_from_repo
+  ios:
+    after_run:
+    - _run_from_repo
+app:
+  envs:
+  - opts:
+      is_expand: false
+    PRETTY_TITLE: %Display Name%
+  - opts:
+      is_expand: false
+    SONAR_HOST_URL: 'https://sonarqube.k8s.wolox.com.ar'
